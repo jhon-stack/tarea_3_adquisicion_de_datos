@@ -1,47 +1,54 @@
 #include <DHT.h>
-
+//pin 2 del arduino
 #define DHTPIN 2
 #define DHTTYPE DHT11
 
 DHT dht11(DHTPIN, DHTTYPE);
 
-float X_k = 0;         // Estimated temperature
-float e_EST_k = 10;    // Estimation error (initialized with a reasonable value)
+//filtro de Kalman
+//estimación inicial de la temperatura:
+double temp_estimate = 20.0;     
+//covarianza inicial de la temperatura
+double temp_covariance = 1.0;    
+
+// Parámetros del filtro de Kalman
+const double dt = 1.0; //intervalo de tiempo
+//cvvarianza del ruido del proceso
+const double Q = 0.1;   
+const double R = 1.0; //->covarianza del ruido de la medición
 
 void setup() {
-  // Iniciar la comunicación serial
   Serial.begin(9600);
-  // Iniciar el sensor DHT11
   dht11.begin();
-  
-  // Esperar un momento para que se estabilice el sensor
-  delay(1000);
-  
-  //Leer el primer valor de la temperatura para que se inicialice X_k
-  X_k = dht11.readTemperature();
 }
 
 void loop() {
-  //retardo de medio segundo para agarrar dos lecturas por segundo
-  delay(500);
+  //lectura cruda
+  double z = dht11.readTemperature();
+  //plicación del filtro de Kalman
+  kalman_filter(z);
+  //Mostrar los resultados
+  //Serial.print("Temperatura medida: ");
+  Serial.print(z);
+  Serial.print(",");
+  //Serial.print("Temperatura estimada: ");
+  Serial.println(temp_estimate);
+  //Serial.println();
 
-  // Leer la temperatura del sensor DHT11
-  float Z_k = dht11.readTemperature();
+  delay(300);
+}
 
-  //Calcular la ganancia de Kalman
-  float e_EST_K_1 = e_EST_k;
-  float e_MEA_K_1 = 1; //Medir el error
-  float K_k = e_EST_K_1 / (e_EST_K_1 + e_MEA_K_1);
-
-  //calcular el valor estimado de X_k en un  tiempo k
-  X_k = X_k + K_k * (Z_k - X_k);
-
-  // actualizar el error de estimacion e_EST_k
-  e_EST_k = (1 - K_k) * e_EST_K_1;
-
-  // Print the raw and Kalman filtered temperature values
-  Serial.print("Raw Temperature: ");
-  Serial.println(Z_k);
-  Serial.print("Filtered Temperature: ");
-  Serial.println(X_k);
+void kalman_filter(double z) {
+  //paso 1: Predicción
+  //predicción del estado
+  double x = temp_estimate;
+  //Predicción de la covarianza del estado
+  double P = temp_covariance + Q;
+  //paso 2: Actualización
+  //calculo de la ganancia de Kalman
+  double K = P / (P + R);
+  //actualización del estado
+  temp_estimate = x + K * (z - x);
+  //actualización de la covarianza del estado
+  temp_covariance = (1 - K) * P;
 }
